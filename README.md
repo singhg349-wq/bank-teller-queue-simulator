@@ -1,61 +1,94 @@
 # Bank Teller Queue Simulator
 
-A discrete-time simulation of a multi-teller bank service system in Python. Customers wait in a single shared queue, tellers serve them in fixed time cycles, and the simulation tracks how much of each teller's time was spent working versus idle.
+![tests](https://github.com/singhg349-wq/bank-teller-queue-simulator/actions/workflows/tests.yml/badge.svg)
 
-## What it does
+A discrete-time simulation of a multi-teller bank in Python. Customers wait in one shared queue, tellers serve them in fixed time cycles, and the simulation tracks how much of each teller's time went to serving customers and how much was idle.
 
-The simulation runs on a small command-based language rather than a fixed script — each command advances or inspects the system state:
+## Commands
 
-- `call N` — creates `N` tellers, numbered `0` through `N-1`
-- `add t1 t2 t3 ...` — adds customers to the back of the queue, each needing the given number of time units of service
-- `service N` — advances the simulation by `N` time units: any idle teller picks up the next customer waiting in the queue, then every teller processes up to `N` units against whichever customer they currently have
-- `status` — prints each teller's cumulative service time, how many customers are still waiting, and each teller's idle time as a percentage of total elapsed time
-- `quit` — ends the simulation and prints a final summary of every teller
+The simulation is driven by a small command language:
+
+| Command | What it does |
+|---|---|
+| `call N` | Creates `N` tellers, numbered `0` to `N-1` |
+| `add t1 t2 ...` | Adds customers to the back of the queue, each needing the given units of service |
+| `service N` | Advances time by `N` units: each free teller takes the next customer in line, then every teller works up to `N` units on their customer |
+| `status` | Prints each teller's total service time, the queue length, and each teller's idle time as a percentage of all elapsed time |
+| `quit` | Ends the simulation and prints a final summary |
 
 ## Running
 
-python3 banking.py
+```bash
+python3 banking.py                        # built-in example scenario
+python3 banking.py example_commands.txt   # commands from a file, one per line
+python3 banking.py - < my_commands.txt    # commands from standard input
+```
 
+Only the standard library is needed.
 
-The script runs a built-in example scenario (3 tellers, 3 customers, two service cycles) as soon as it's executed — no arguments needed. To try a different scenario, edit the `commands` list at the bottom of the file.
+## Example
 
-## Example output
+`example_commands.txt` (also the built-in scenario):
 
+```
+call 3
+add 5 10 15
+service 6
+status
+service 6
+status
+quit
+```
+
+Output:
+
+```
 Teller: 0 Total service time: 5
 Teller: 1 Total service time: 6
 Teller: 2 Total service time: 6
 Customers waiting in queue: 0
-0 idle time: 100.00%
+0 idle time: 16.67%
 1 idle time: 0.00%
 2 idle time: 0.00%
 Teller: 0 Total service time: 5
 Teller: 1 Total service time: 10
 Teller: 2 Total service time: 12
 Customers waiting in queue: 0
-0 idle time: 100.00%
-1 idle time: 50.00%
+0 idle time: 58.33%
+1 idle time: 16.67%
 2 idle time: 0.00%
 Simulation ended.
 Teller: 0 Total service time: 5
 Teller: 1 Total service time: 10
 Teller: 2 Total service time: 12
+```
 
+Teller 0 finishes its 5-unit customer one unit into the first 6-unit cycle, then has nobody to serve in the second cycle: 7 idle units out of 12, or 58.33%.
 
 ## How it works
 
-This is a classic multi-server, single-queue system: several tellers (servers) pull from one shared FIFO line rather than each having their own queue. Time moves in discrete cycles rather than continuously — each `service N` call represents `N` units of time passing at once, during which every teller either keeps working on their current customer or, if free, grabs the next person in line.
+This is a multi-server, single-queue system: several tellers pull from one shared FIFO line instead of each having their own. Time moves in discrete cycles, so each `service N` represents `N` units passing at once.
 
-A teller's idle percentage is tracked as accumulated idle time divided by *total elapsed simulation time*, not just the current cycle — so it reflects how idle that teller has been across the whole simulation so far, not just a snapshot.
+For every teller in every cycle, `Teller.service()` returns how many units were actually spent serving, and the rest of the cycle counts as idle. Idle percentage is total idle time divided by total elapsed time, so it covers the whole run, not just the latest cycle. For every teller, service time plus idle time always equals elapsed time, and the tests check that.
 
-## Design Notes
+## Design notes
 
-- **Manual command parsing**: commands are split into tokens with a hand-written character loop instead of Python's built-in `str.split()`. Functionally identical to `split()` for this input, but it means the parsing logic doesn't depend on a library method doing the work invisibly.
+- **Manual command parsing:** commands are split into tokens with a hand-written character loop instead of `str.split()`. It behaves the same for this input, extra spaces included, but shows the tokenizing logic explicitly.
+- **Partial-cycle idle time:** a teller who finishes a customer partway through a cycle is idle only for the remainder of that cycle, not the whole cycle.
+- **Same-cycle pickup:** a free teller takes a new customer at the start of a `service` cycle and starts on them in that same cycle, so no customer waits an extra cycle for an open teller.
+- **`queue.Queue`:** it's thread-safe, which this single-threaded simulation doesn't need (`collections.deque` would also work). It was chosen for its FIFO semantics and clean `get_nowait()` / `Empty` handling.
 
-- **No idle gap when picking up a new customer**: within a single `service` call, a teller that just went idle and picked up a new customer from the queue is serviced in that *same* cycle, not the next one. This matters because it means a teller's queue-check and service-work both happen every cycle, so a customer never sits fully served-and-idle for a full extra cycle before their replacement starts.
+## Tests
 
-- **`queue.Queue` instead of a plain list**: `Queue` is a thread-safe structure meant for producer/consumer scenarios across multiple threads, which this single-threaded simulation doesn't strictly need — a plain list or `collections.deque` would work identically here. It was used anyway for the built-in FIFO ordering and the safety of `get_nowait()`/`Empty` handling, which reads clearly even without concurrency.
+```bash
+python3 -m unittest -v
+```
 
-- **Idle time as a percentage, not a raw count**: dividing accumulated idle time by total elapsed time (rather than reporting raw idle units) keeps the number meaningful and comparable regardless of how long the simulation has been running.
+The tests run automatically on every push through GitHub Actions.
+
+## License
+
+MIT
 
 ## Author
 

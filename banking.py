@@ -18,13 +18,17 @@ class Teller:
 
     def service(self, serv_time):
         #Serve a customer for a given amount of time.
-        if self.current_customer_time is not None:
-            if serv_time >= self.current_customer_time:
-                self.total_service_time += self.current_customer_time
-                self.current_customer_time = None
-            else:
-                self.current_customer_time -= serv_time
-                self.total_service_time += serv_time
+        #Returns how many of those time units were actually spent working.
+        if self.current_customer_time is None:
+            return 0
+        if serv_time >= self.current_customer_time:
+            worked = self.current_customer_time
+            self.current_customer_time = None
+        else:
+            worked = serv_time
+            self.current_customer_time -= serv_time
+        self.total_service_time += worked
+        return worked
 
     def accept(self, cust_time):
         #Accept a new customer with their requested time if available.
@@ -83,9 +87,9 @@ def banking_simulation(commands):
                         teller.accept(queue.get_nowait())
                     except Empty:
                         pass
-                teller.service(cycle_time)
-                if teller.is_available():
-                    idle_times[teller.get_name()] += cycle_time
+                worked = teller.service(cycle_time)
+                # Idle = the part of this cycle the teller wasn't serving anyone
+                idle_times[teller.get_name()] += cycle_time - worked
             total_time += cycle_time
 
         elif action == "status":
@@ -105,8 +109,8 @@ def banking_simulation(commands):
                 print(teller)
 
 
-# Example commands for the simulation
-commands = [
+# Example commands, used when no command file is given
+EXAMPLE_COMMANDS = [
     "call 3",  # Create 3 tellers (t0, t1, t2)
     "add 5 10 15",  # Add 3 customers with service times 5, 10, and 15
     "service 6",  # Run a service cycle of 6 units of time
@@ -116,5 +120,13 @@ commands = [
     "quit"  # End the simulation
 ]
 
-# Call the banking simulation function with the commands
-banking_simulation(commands)
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1:
+        # Read commands from a file, one per line ("-" means standard input)
+        source = sys.stdin if sys.argv[1] == "-" else open(sys.argv[1])
+        commands = [line.strip() for line in source if line.strip()]
+    else:
+        commands = EXAMPLE_COMMANDS
+    banking_simulation(commands)

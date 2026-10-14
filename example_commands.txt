@@ -1,0 +1,7 @@
+call 3
+add 5 10 15
+service 6
+status
+service 6
+status
+quit
